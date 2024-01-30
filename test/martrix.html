@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Canvas 矩阵示例</title>
+    <style>
+      #canvas {
+        border: 1px solid black;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas" width="400" height="400"></canvas>
+    <script>
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+
+      // 设置初始变换矩阵
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+      // 绘制一个旋转和缩放的矩形
+      function drawRect() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 平移到画布中心
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+
+        // 旋转 45 度
+        // const angle = (45 * Math.PI) / 180;
+        // ctx.rotate(angle);
+
+        // 缩放为原来的一半
+        ctx.scale(0.5, 0.5);
+
+        // 绘制矩形
+        ctx.fillStyle = 'red';
+        ctx.fillRect(-50, -50, 100, 100);
+
+        const matrix = ctx.getTransform();
+        console.log('当前矩阵数值:' +  matrix);
+      }
+
+      drawRect();
+    </script>
+  </body>
+</html>
