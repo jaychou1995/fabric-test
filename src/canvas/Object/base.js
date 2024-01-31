@@ -1,5 +1,6 @@
 import EventCenter from "../EventCenter";
 import Util from "../utils";
+import Point from "./point";
 
 export default class BaseObject extends EventCenter {
   type = "object"; //类型
@@ -25,11 +26,15 @@ export default class BaseObject extends EventCenter {
   rotatingPointOffset = 20;
   hasRotatingPoint = true; //物体是否有旋转控制
   fill = "pink"; // 默认图形颜色
-  borderWidth = 1; //物体选中框的宽度
+  strokeWidth = 1; //物体选中框的宽度
   borderColor = "#2099D4"; // 激活态边框颜色
   cornerColor = "#2099D4"; // 激活态控制点颜色
   /** 物体默认描边颜色 */
   stroke = "#000";
+  /** 物体包围盒的各个控制点的坐标 */
+  coords = [];
+  /** 物体控制点大小，单位 px */
+  cornerSize = 8;
 
   constructor(options) {
     /** 计划设计类型
@@ -126,5 +131,288 @@ export default class BaseObject extends EventCenter {
   setActive(active) {
     this.active = !!active;
     return this;
+  }
+
+  /** 获取物体中心点 */
+  getCenterPoint() {
+    return this.translateToCenterPoint(
+      new Point(this.left, this.top),
+      this.originX,
+      this.originY
+    );
+  }
+  /** 将中心点移到变换基点 */
+  translateToCenterPoint(point, originX, originY) {
+    let cx = point.x,
+      cy = point.y;
+
+    if (originX === "left") {
+      cx = point.x + this.getWidth() / 2;
+    } else if (originX === "right") {
+      cx = point.x - this.getWidth() / 2;
+    }
+
+    if (originY === "top") {
+      cy = point.y + this.getHeight() / 2;
+    } else if (originY === "bottom") {
+      cy = point.y - this.getHeight() / 2;
+    }
+    const p = new Point(cx, cy);
+    if (this.angle) {
+      return Util.rotatePoint(p, point, Util.degreesToRadians(this.angle));
+    } else {
+      return p;
+    }
+  }
+
+  /** 重新设置物体包围盒的边框和各个控制点，包括位置和大小 */
+  setCoords() {
+    let strokeWidth = this.strokeWidth > 1 ? this.strokeWidth : 0,
+      padding = this.padding,
+      radian = Util.degreesToRadians(this.angle);
+
+    this.currentWidth = (this.width + strokeWidth) * this.scaleX + padding * 2;
+    this.currentHeight =
+      (this.height + strokeWidth) * this.scaleY + padding * 2;
+
+    // 物体中心点到顶点的斜边长度
+    let _hypotenuse = Math.sqrt(
+      Math.pow(this.currentWidth / 2, 2) + Math.pow(this.currentHeight / 2, 2)
+    );
+    let _angle = Math.atan(this.currentHeight / this.currentWidth);
+
+    // offset added for rotate and scale actions
+    let offsetX = Math.cos(_angle + radian) * _hypotenuse,
+      offsetY = Math.sin(_angle + radian) * _hypotenuse,
+      sinTh = Math.sin(radian),
+      cosTh = Math.cos(radian);
+
+    let coords = this.getCenterPoint();
+    let tl = {
+      x: coords.x - offsetX,
+      y: coords.y - offsetY,
+    };
+    let tr = {
+      x: tl.x + this.currentWidth * cosTh,
+      y: tl.y + this.currentWidth * sinTh,
+    };
+    let br = {
+      x: tr.x - this.currentHeight * sinTh,
+      y: tr.y + this.currentHeight * cosTh,
+    };
+    let bl = {
+      x: tl.x - this.currentHeight * sinTh,
+      y: tl.y + this.currentHeight * cosTh,
+    };
+    let ml = {
+      x: tl.x - (this.currentHeight / 2) * sinTh,
+      y: tl.y + (this.currentHeight / 2) * cosTh,
+    };
+    let mt = {
+      x: tl.x + (this.currentWidth / 2) * cosTh,
+      y: tl.y + (this.currentWidth / 2) * sinTh,
+    };
+    let mr = {
+      x: tr.x - (this.currentHeight / 2) * sinTh,
+      y: tr.y + (this.currentHeight / 2) * cosTh,
+    };
+    let mb = {
+      x: bl.x + (this.currentWidth / 2) * cosTh,
+      y: bl.y + (this.currentWidth / 2) * sinTh,
+    };
+    let mtr = {
+      x: tl.x + (this.currentWidth / 2) * cosTh,
+      y: tl.y + (this.currentWidth / 2) * sinTh,
+    };
+
+    // clockwise
+    this.oCoords = { tl, tr, br, bl, ml, mt, mr, mb, mtr };
+
+    // set coordinates of the draggable boxes in the corners used to scale/rotate the image
+    this._setCornerCoords();
+
+    return this;
+  }
+  /** 重新设置物体的每个控制点，包括位置和大小 */
+  _setCornerCoords() {
+    let coords = this.oCoords,
+      radian = Util.degreesToRadians(this.angle),
+      newTheta = Util.degreesToRadians(45 - this.angle),
+      cornerHypotenuse = Math.sqrt(2 * Math.pow(this.cornerSize, 2)) / 2,
+      cosHalfOffset = cornerHypotenuse * Math.cos(newTheta),
+      sinHalfOffset = cornerHypotenuse * Math.sin(newTheta),
+      sinTh = Math.sin(radian),
+      cosTh = Math.cos(radian);
+
+    coords.tl.corner = {
+      tl: {
+        x: coords.tl.x - sinHalfOffset,
+        y: coords.tl.y - cosHalfOffset,
+      },
+      tr: {
+        x: coords.tl.x + cosHalfOffset,
+        y: coords.tl.y - sinHalfOffset,
+      },
+      bl: {
+        x: coords.tl.x - cosHalfOffset,
+        y: coords.tl.y + sinHalfOffset,
+      },
+      br: {
+        x: coords.tl.x + sinHalfOffset,
+        y: coords.tl.y + cosHalfOffset,
+      },
+    };
+
+    coords.tr.corner = {
+      tl: {
+        x: coords.tr.x - sinHalfOffset,
+        y: coords.tr.y - cosHalfOffset,
+      },
+      tr: {
+        x: coords.tr.x + cosHalfOffset,
+        y: coords.tr.y - sinHalfOffset,
+      },
+      br: {
+        x: coords.tr.x + sinHalfOffset,
+        y: coords.tr.y + cosHalfOffset,
+      },
+      bl: {
+        x: coords.tr.x - cosHalfOffset,
+        y: coords.tr.y + sinHalfOffset,
+      },
+    };
+
+    coords.bl.corner = {
+      tl: {
+        x: coords.bl.x - sinHalfOffset,
+        y: coords.bl.y - cosHalfOffset,
+      },
+      bl: {
+        x: coords.bl.x - cosHalfOffset,
+        y: coords.bl.y + sinHalfOffset,
+      },
+      br: {
+        x: coords.bl.x + sinHalfOffset,
+        y: coords.bl.y + cosHalfOffset,
+      },
+      tr: {
+        x: coords.bl.x + cosHalfOffset,
+        y: coords.bl.y - sinHalfOffset,
+      },
+    };
+
+    coords.br.corner = {
+      tr: {
+        x: coords.br.x + cosHalfOffset,
+        y: coords.br.y - sinHalfOffset,
+      },
+      bl: {
+        x: coords.br.x - cosHalfOffset,
+        y: coords.br.y + sinHalfOffset,
+      },
+      br: {
+        x: coords.br.x + sinHalfOffset,
+        y: coords.br.y + cosHalfOffset,
+      },
+      tl: {
+        x: coords.br.x - sinHalfOffset,
+        y: coords.br.y - cosHalfOffset,
+      },
+    };
+
+    coords.ml.corner = {
+      tl: {
+        x: coords.ml.x - sinHalfOffset,
+        y: coords.ml.y - cosHalfOffset,
+      },
+      tr: {
+        x: coords.ml.x + cosHalfOffset,
+        y: coords.ml.y - sinHalfOffset,
+      },
+      bl: {
+        x: coords.ml.x - cosHalfOffset,
+        y: coords.ml.y + sinHalfOffset,
+      },
+      br: {
+        x: coords.ml.x + sinHalfOffset,
+        y: coords.ml.y + cosHalfOffset,
+      },
+    };
+
+    coords.mt.corner = {
+      tl: {
+        x: coords.mt.x - sinHalfOffset,
+        y: coords.mt.y - cosHalfOffset,
+      },
+      tr: {
+        x: coords.mt.x + cosHalfOffset,
+        y: coords.mt.y - sinHalfOffset,
+      },
+      bl: {
+        x: coords.mt.x - cosHalfOffset,
+        y: coords.mt.y + sinHalfOffset,
+      },
+      br: {
+        x: coords.mt.x + sinHalfOffset,
+        y: coords.mt.y + cosHalfOffset,
+      },
+    };
+
+    coords.mr.corner = {
+      tl: {
+        x: coords.mr.x - sinHalfOffset,
+        y: coords.mr.y - cosHalfOffset,
+      },
+      tr: {
+        x: coords.mr.x + cosHalfOffset,
+        y: coords.mr.y - sinHalfOffset,
+      },
+      bl: {
+        x: coords.mr.x - cosHalfOffset,
+        y: coords.mr.y + sinHalfOffset,
+      },
+      br: {
+        x: coords.mr.x + sinHalfOffset,
+        y: coords.mr.y + cosHalfOffset,
+      },
+    };
+
+    coords.mb.corner = {
+      tl: {
+        x: coords.mb.x - sinHalfOffset,
+        y: coords.mb.y - cosHalfOffset,
+      },
+      tr: {
+        x: coords.mb.x + cosHalfOffset,
+        y: coords.mb.y - sinHalfOffset,
+      },
+      bl: {
+        x: coords.mb.x - cosHalfOffset,
+        y: coords.mb.y + sinHalfOffset,
+      },
+      br: {
+        x: coords.mb.x + sinHalfOffset,
+        y: coords.mb.y + cosHalfOffset,
+      },
+    };
+
+    coords.mtr.corner = {
+      tl: {
+        x: coords.mtr.x - sinHalfOffset + sinTh * this.rotatingPointOffset,
+        y: coords.mtr.y - cosHalfOffset - cosTh * this.rotatingPointOffset,
+      },
+      tr: {
+        x: coords.mtr.x + cosHalfOffset + sinTh * this.rotatingPointOffset,
+        y: coords.mtr.y - sinHalfOffset - cosTh * this.rotatingPointOffset,
+      },
+      bl: {
+        x: coords.mtr.x - cosHalfOffset + sinTh * this.rotatingPointOffset,
+        y: coords.mtr.y + sinHalfOffset - cosTh * this.rotatingPointOffset,
+      },
+      br: {
+        x: coords.mtr.x + sinHalfOffset + sinTh * this.rotatingPointOffset,
+        y: coords.mtr.y + cosHalfOffset - cosTh * this.rotatingPointOffset,
+      },
+    };
   }
 }

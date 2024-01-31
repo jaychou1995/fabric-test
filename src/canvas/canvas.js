@@ -18,6 +18,8 @@ export default class Canvas extends EventCenter {
 
   _objects = []; //画布中所有的图形
   _activeObject; //当前激活的图形
+  /** 当前选中的组 */
+  _activeGroup;
 
   _currentTransform; // 图形点击激活前保存一些图形的信息
   pointerDownOffsetWindowPoint; // 点击鼠标点位距离屏幕相对位置
@@ -58,9 +60,99 @@ export default class Canvas extends EventCenter {
    * 所以可以加一个属性来先批量添加元素，最后再一次渲染（手动调用 renderAll 函数即可）
    */
   add(...args) {
-    console.log(args);
     //一次性将[]中对象push进去
     this._objects.push.apply(this._objects, args);
+    console.log("this._objects", this._objects);
+    // console.log("canvas", this);
+
+    for (let i = args.length; i--; ) {
+      let obj = args[i];
+      obj.setCoords();
+      obj.canvas = this;
+      this.emit("object:added", { target: obj });
+      obj.emit("added");
+    }
+
+    this.renderAll();
+    return this;
+  }
+
+  /** 渲染全部图形,先清空画布再画,大部分是在 lower-canvas 上先画未激活物体，再画激活物体 */
+  renderAll(ctx) {
+    if (!ctx) ctx = this.lowerCanvasElCtx;
+
+    if (this.upperCanvasElCtx) {
+      this.clearContext(this.upperCanvasElCtx);
+    }
+    this.clearContext(this.lowerCanvasElCtx);
+
+    this.emit("before:render");
+
+    // 先绘制未激活物体，再绘制激活物体 给图形排序
+    const sortedObjects = this._chooseObjectsToRender();
+    for (let i = 0, len = sortedObjects.length; i < len; ++i) {
+      this._draw(ctx, sortedObjects[i]);
+    }
+
+    this.emit("after:render");
+  }
+
+  /**
+   * @description: 清除某一区域画布
+   * @return {*}
+   */
+  clearContext(ctx) {
+    ctx && ctx.clearRect(0, 0, this.width, this.height);
+    return this;
+  }
+
+  /**
+   * @description: 绘制
+   * @param {*} ctx
+   * @param {*} object
+   * @return {*}
+   */
+  _draw(ctx, object) {
+    if (!object) return;
+    object.render(ctx);
+  }
+
+  /** 将所有物体分成两个组，一组是未激活态，一组是激活态，然后将激活组放在最后，这样就能够绘制到最上层 */
+  _chooseObjectsToRender() {
+    // 当前有没有激活的物体
+    let activeObject = this._activeObject;
+    // 当前有没有激活的组（也就是多个物体）
+    let activeGroup = this._activeGroup;
+
+    // 最终要渲染的物体顺序，也就是把激活的物体放在后面绘制
+    let objsToRender = [];
+
+    if (activeGroup) {
+      // 如果选中多个物体
+      const activeGroupObjects = [];
+      for (let i = 0, length = this._objects.length; i < length; i++) {
+        let object = this._objects[i];
+        if (activeGroup.contains(object)) {
+          activeGroupObjects.push(object);
+        } else {
+          objsToRender.push(object);
+        }
+      }
+      objsToRender.push(activeGroup);
+    } else if (activeObject) {
+      // 如果只选中一个物体
+      let index = this._objects.indexOf(activeObject);
+      objsToRender = this._objects.slice();
+      if (index > -1) {
+        objsToRender.splice(index, 1);
+        objsToRender.push(activeObject);
+      }
+    } else {
+      // 所有物体都没被选中
+      objsToRender = this._objects;
+    }
+
+    return objsToRender;
   }
 
   _pointerdown(e) {
