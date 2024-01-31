@@ -10,13 +10,23 @@
 
 <script setup>
 import { ref, onMounted } from "vue";
-import Canvas from "@/jcanvas/index.js";
+import Canvas from "@/canvas/index.js";
 // import { appStore } from "../stores/app";
 // const useappStore = appStore();
 const canvasContainer = ref(null);
 onMounted(() => {
   const canvas = new Canvas.Canvas(canvasContainer.value);
-  console.log(canvas);
+
+  const rect = new Canvas.CanvasObject({
+    top: 0,
+    left: 0,
+    width: 100,
+    height: 100,
+    fill: "#4169E1",
+    graphical: "rect",
+  });
+
+  canvas.add(rect);
 });
 </script>
 

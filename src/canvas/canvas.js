@@ -52,6 +52,31 @@ export default class Canvas extends EventCenter {
     //初始化其他数据 处理数据
     this._initData();
   }
+  /** 添加元素
+   * 目前的模式是调用 add 添加物体的时候就立马渲染，
+   * 如果一次性加入大量元素，就会做很多无用功，
+   * 所以可以加一个属性来先批量添加元素，最后再一次渲染（手动调用 renderAll 函数即可）
+   */
+  add(...args) {
+    console.log(args);
+    //一次性将[]中对象push进去
+    this._objects.push.apply(this._objects, args);
+  }
+
+  _pointerdown(e) {
+    console.log("_pointerdown");
+    // this.setoPointerdownPosition(e);
+    // let doingModel = this.__canvasModelList[this.canvasModel];
+    // doingModel.pointerdown(e, this);
+  }
+  _pointermove(e) {
+    console.log("_pointermove");
+    // let doingModel = this.__canvasModelList[this.canvasModel];
+    // doingModel.pointermove(e, this);
+  }
+  _pointerup(e) {
+    console.log("_pointerup");
+  }
 
   /**
    * @description: 初始化其他数据 处理数据
@@ -107,6 +132,16 @@ export default class Canvas extends EventCenter {
     );
   }
 
+  __initRetinaScaling(canvas, ctx, dpr) {
+    const { width, height } = this;
+    // 重新设置 canvas 自身宽高大小和 css 大小。放大 canvas；css 保持不变，因为我们需要那么多的点
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.width = width + "px";
+    canvas.style.height = height + "px";
+    // 直接用 scale 放大整个坐标系，相对来说就是放大了每个绘制操作
+    ctx.scale(dpr, dpr);
+  }
   /**
    * @description: 创建canvas外面的包围容器 因为使用了多个canvas 要在下层画布创建后面
    * @return {*}
