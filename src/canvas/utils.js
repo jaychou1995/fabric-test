@@ -36,6 +36,28 @@ export default class Util {
     }
     return element;
   }
+  /** 加载图片,转成img标签 */
+  static loadImage(url, options = {}) {
+    return new Promise(function (resolve, reject) {
+      let img = document.createElement("img");
+      let done = () => {
+        img.onload = img.onerror = null;
+        resolve(img);
+      };
+      if (url) {
+        img.onload = done;
+        img.onerror = () => {
+          reject(new Error("Error loading " + img.src));
+        };
+        options &&
+          options.crossOrigin &&
+          (img.crossOrigin = options.crossOrigin);
+        img.src = url;
+      } else {
+        done();
+      }
+    });
+  }
 
   /** 角度转弧度，注意 canvas 中用的都是弧度，但是角度对我们来说比较直观 */
   static degreesToRadians(degrees) {

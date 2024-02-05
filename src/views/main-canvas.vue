@@ -36,6 +36,19 @@ onMounted(() => {
   });
 
   canvas.add(rect, rect2);
+
+  // Canvas.ImgObject.fromURL(
+  //   "https://p26-passport.byteacctimg.com/img/user-avatar/7470b65342454dd6699a6cf772652260~300x300.image",
+  //   (img) => {
+  //     canvas.add(img);
+  //   },
+  //   {
+  //     width: 200,
+  //     height: 200,
+  //     left: 300,
+  //     top: 500,
+  //   }
+  // );
 });
 </script>
 
