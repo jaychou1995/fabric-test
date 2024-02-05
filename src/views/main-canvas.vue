@@ -18,15 +18,24 @@ onMounted(() => {
   const canvas = new Canvas.Canvas(canvasContainer.value);
 
   const rect = new Canvas.CanvasObject({
-    top: 0,
-    left: 0,
+    top: 50,
+    left: 50,
     width: 100,
     height: 100,
-    fill: "#4169E1",
+    fill: "pink",
     graphical: "rect",
   });
 
-  canvas.add(rect);
+  const rect2 = new Canvas.CanvasObject({
+    top: 250,
+    left: 250,
+    width: 100,
+    height: 100,
+    fill: "#e6e6e6",
+    graphical: "rect",
+  });
+
+  canvas.add(rect, rect2);
 });
 </script>
 

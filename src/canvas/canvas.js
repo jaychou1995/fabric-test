@@ -21,10 +21,12 @@ export default class Canvas extends EventCenter {
   /** 当前选中的组 */
   _activeGroup;
 
-  _currentTransform; // 图形点击激活前保存一些图形的信息
   pointerDownOffsetWindowPoint; // 点击鼠标点位距离屏幕相对位置
   _pointerDownOffsetCanvasPoint; //点击鼠标点位距离画布相对位置
   _offset; // 画布距离屏幕位置offset
+
+  /** 当前物体的变换信息 */
+  _currentTransform;
 
   canvasModel = "select";
   __canvasModelList = {
@@ -156,20 +158,195 @@ export default class Canvas extends EventCenter {
   }
 
   _pointerdown(e) {
-    console.log("_pointerdown");
-    // this.setoPointerdownPosition(e);
-    // let doingModel = this.__canvasModelList[this.canvasModel];
-    // doingModel.pointerdown(e, this);
+    let doingModel = this.__canvasModelList[this.canvasModel];
+    let target = doingModel._pointerdown(e, this);
+
+    this.emit("mouse:down", { target, e });
+    target && target.emit("mousedown", { e });
   }
   _pointermove(e) {
-    console.log("_pointermove");
-    // let doingModel = this.__canvasModelList[this.canvasModel];
-    // doingModel.pointermove(e, this);
+    let doingModel = this.__canvasModelList[this.canvasModel];
+    doingModel._pointermove(e, this);
   }
   _pointerup(e) {
-    console.log("_pointerup");
+    let doingModel = this.__canvasModelList[this.canvasModel];
+    doingModel._pointerup(e, this);
   }
 
+  _setupCurrentTransform(e, target) {
+    let action = "drag",
+      corner,
+      pointer = Util.getPointer(e, target.canvas.upperCanvasEl);
+
+    corner = target._findTargetCorner(e, this._offset);
+
+    if (corner) {
+      // 根据点击的控制点判断此次操作是什么
+      action =
+        corner === "ml" || corner === "mr"
+          ? "scaleX"
+          : corner === "mt" || corner === "mb"
+          ? "scaleY"
+          : corner === "mtr"
+          ? "rotate"
+          : "scale";
+    }
+
+    let originX = "center",
+      originY = "center";
+
+    if (corner === "ml" || corner === "tl" || corner === "bl") {
+      // 如果点击的是左边的控制点，则变换基点就是右边，以右边为基准向左变换
+      originX = "right";
+    } else if (corner === "mr" || corner === "tr" || corner === "br") {
+      originX = "left";
+    }
+
+    if (corner === "tl" || corner === "mt" || corner === "tr") {
+      // 如果点击的是上方的控制点，则变换基点就是底部，以底边为基准向上变换
+      originY = "bottom";
+    } else if (corner === "bl" || corner === "mb" || corner === "br") {
+      originY = "top";
+    }
+
+    if (corner === "mtr") {
+      // 如果是旋转操作，则基点就是中心点
+      originX = "center";
+      originY = "center";
+    }
+
+    this._currentTransform = {
+      target,
+      action,
+      scaleX: target.scaleX,
+      scaleY: target.scaleY,
+      offsetX: pointer.x - target.left,
+      offsetY: pointer.y - target.top,
+      originX,
+      originY,
+      ex: pointer.x,
+      ey: pointer.y,
+      left: target.left,
+      top: target.top,
+      theta: Util.degreesToRadians(target.angle),
+      width: target.width * target.scaleX,
+      mouseXSign: 1,
+      mouseYSign: 1,
+    };
+    // 记录物体原始的 original 变换参数
+    this._currentTransform.original = {
+      left: target.left,
+      top: target.top,
+      scaleX: target.scaleX,
+      scaleY: target.scaleY,
+      originX,
+      originY,
+    };
+  }
+
+  /** 将所有物体设置成未激活态 */
+  deactivateAll() {
+    let allObjects = this._objects,
+      i = 0,
+      len = allObjects.length;
+    for (; i < len; i++) {
+      allObjects[i].setActive(false);
+    }
+    // this.discardActiveGroup();
+    // this.discardActiveObject();
+    return this;
+  }
+  /** 设置图形为激活状态 */
+  setActiveObject(object) {
+    if (this._activeObject) {
+      // 如果当前有激活物体
+      this._activeObject.setActive(false);
+    }
+    this._activeObject = object;
+    object.setActive(true);
+    return this;
+  }
+
+  /** 检测是否有物体在鼠标位置 */
+  findTarget(e, skipGroup = false) {
+    let target;
+
+    // 优先考虑当前组中的物体，因为激活的物体被选中的概率大
+    let activeGroup = this._activeGroup;
+    if (activeGroup && !skipGroup && this.containsPoint(e, activeGroup)) {
+      target = activeGroup;
+      return target;
+    }
+
+    // 遍历所有物体，判断鼠标点是否在物体包围盒内
+    for (let i = this._objects.length; i--; ) {
+      if (this._objects[i] && this.containsPoint(e, this._objects[i])) {
+        target = this._objects[i];
+        break;
+      }
+    }
+
+    if (target) return target;
+  }
+  /**
+   * @description: 判断鼠标点是否在物体包围盒内
+   * @param {*} e
+   * @param {*} target
+   * @return {*}
+   */
+  containsPoint(e, target) {
+    console.log(e, target);
+    let pointer = this.getPointer(e),
+      xy = this._normalizePointer(target, pointer),
+      x = xy.x,
+      y = xy.y;
+
+    // 下面这是参考文献，不过好像打不开
+    // http://www.geog.ubc.ca/courses/klink/gis.notes/ncgia/u32.html
+    // http://idav.ucdavis.edu/~okreylos/TAship/Spring2000/PointInPolygon.html
+
+    // we iterate through each object. If target found, return it.
+    let iLines = target._getImageLines(target.oCoords),
+      xpoints = target._findCrossPoints(x, y, iLines);
+
+    // if xcount is odd then we clicked inside the object
+    // For the specific case of square images xcount === 1 in all true cases
+    if (
+      (xpoints && xpoints % 2 === 1) ||
+      target._findTargetCorner(e, this._offset)
+    ) {
+      return true;
+    }
+    return false;
+  }
+  /** 如果当前的物体在当前的组内，则要考虑扣去组的 top、left 值 */
+  _normalizePointer(object, pointer) {
+    let activeGroup = this._activeGroup,
+      x = pointer.x,
+      y = pointer.y;
+
+    let isObjectInGroup =
+      activeGroup && object.type !== "group" && activeGroup.contains(object);
+
+    if (isObjectInGroup) {
+      x -= activeGroup.left;
+      y -= activeGroup.top;
+    }
+    return { x, y };
+  }
+
+  /**
+   * @description: 获取鼠标位置相对于画布的坐标,因为e得到值是相对于屏幕,_offset是偏移量,减去后就是相对于画布
+   * @param {*} e
+   * @return {*}
+   */
+  getPointer(e) {
+    let pointer = Util.getPointer(e, this.upperCanvasEl);
+    return {
+      x: pointer.x - this._offset.left,
+      y: pointer.y - this._offset.top,
+    };
+  }
   /**
    * @description: 初始化其他数据 处理数据
    * @return {*}
